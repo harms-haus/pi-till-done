@@ -1,7 +1,7 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ToolDefinition, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TodoItem, TodoDetails } from "./types";
 import {
   ACTION_TO_STATUS,
@@ -65,6 +65,54 @@ function toNewItems(items: readonly { text: string }[]): TodoItem[] {
   return items.map((t) => ({ text: t.text, status: INITIAL_STATUS }));
 }
 
+/** Handle insert mode for write_todos execute. */
+function handleInsertMode(
+  params: { index?: number; todos: { text: string }[] },
+  currentTodos: readonly TodoItem[],
+  ctx: ExtensionContext,
+): { content: Array<{ type: "text"; text: string }>; details: TodoDetails } {
+  // Validate index parameter
+  if (params.index === undefined) {
+    return makeErrorResult(
+      "write",
+      "Error: 'index' is required for the 'insert' mode",
+      "index required for insert",
+    );
+  }
+
+  // Validate index range (0 to length inclusive)
+  if (params.index < 0 || params.index > currentTodos.length) {
+    return makeErrorResult(
+      "write",
+      `Error: index ${params.index} out of range (0 to ${currentTodos.length})`,
+      `index ${params.index} out of range (0 to ${currentTodos.length})`,
+    );
+  }
+
+  // Check total count
+  if (currentTodos.length + params.todos.length > MAX_TODOS) {
+    return makeErrorResult(
+      "write",
+      `Error: inserting ${params.todos.length} item(s) would exceed maximum of ${MAX_TODOS} todos (currently ${currentTodos.length})`,
+      "max todos exceeded",
+    );
+  }
+
+  const newItems: TodoItem[] = toNewItems(params.todos);
+  insertTodos(params.index, newItems);
+  updateUI(ctx, getTodos());
+
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `Inserted ${newItems.length} item(s) at index ${params.index}\n\n${formatTodoListText(getTodos())}`,
+      },
+    ],
+    details: { action: "write" as const, todos: cloneTodos(getTodos()) },
+  };
+}
+
 // ── Tool Factories ──
 
 export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, TodoDetails> {
@@ -87,6 +135,7 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
       "Always call edit_todos with action 'start' on the next item before working on it, then 'complete' when done.",
     ],
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       // Defense-in-depth text length check
       const oversizedIdx = findOversizedItem(params.todos, MAX_TODO_TEXT_LENGTH);
@@ -117,7 +166,6 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
       }
 
       if (params.mode === "append") {
-        // Check total count
         if (currentTodos.length + params.todos.length > MAX_TODOS) {
           return makeErrorResult(
             "write",
@@ -127,7 +175,6 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
         }
 
         const newItems: TodoItem[] = toNewItems(params.todos);
-
         appendTodos(newItems);
         updateUI(ctx, getTodos());
 
@@ -142,61 +189,13 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
         };
       }
 
-      if (params.mode === "insert") {
-        // Validate index parameter
-        if (params.index === undefined || params.index === null) {
-          return makeErrorResult(
-            "write",
-            "Error: 'index' is required for the 'insert' mode",
-            "index required for insert",
-          );
-        }
-
-        // Validate index range (0 to length inclusive)
-        if (params.index < 0 || params.index > currentTodos.length) {
-          return makeErrorResult(
-            "write",
-            `Error: index ${params.index} out of range (0 to ${currentTodos.length})`,
-            `index ${params.index} out of range (0 to ${currentTodos.length})`,
-          );
-        }
-
-        // Check total count
-        if (currentTodos.length + params.todos.length > MAX_TODOS) {
-          return makeErrorResult(
-            "write",
-            `Error: inserting ${params.todos.length} item(s) would exceed maximum of ${MAX_TODOS} todos (currently ${currentTodos.length})`,
-            "max todos exceeded",
-          );
-        }
-
-        const newItems: TodoItem[] = toNewItems(params.todos);
-
-        insertTodos(params.index, newItems);
-        updateUI(ctx, getTodos());
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Inserted ${newItems.length} item(s) at index ${params.index}\n\n${formatTodoListText(getTodos())}`,
-            },
-          ],
-          details: { action: "write" as const, todos: cloneTodos(getTodos()) },
-        };
-      }
-
-      // Should be unreachable due to schema validation, but just in case
-      return makeErrorResult(
-        "write",
-        `Error: unknown mode '${params.mode}'`,
-        `unknown mode '${params.mode}'`,
-      );
+      // Mode is narrowed to "insert" after replace/append branches
+      return handleInsertMode(params, currentTodos, ctx);
     },
 
     renderCall(args, theme) {
-      const modeLabel = args.mode ?? "replace";
-      const count = args.todos?.length ?? 0;
+      const modeLabel = args.mode;
+      const count = args.todos.length;
       let extra = "";
       if (modeLabel === "insert" && args.index !== undefined) {
         extra = ` @${args.index}`;
@@ -221,6 +220,7 @@ export function createListTodosTool(): ToolDefinition<typeof ListTodosParams, To
     description: "List all todos with their current status and 0-based indices.",
     parameters: ListTodosParams,
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
       return {
         content: [{ type: "text" as const, text: formatTodoListText(getTodos()) }],
@@ -244,9 +244,10 @@ export function createEditTodosTool(): ToolDefinition<typeof EditTodosParams, To
       "Apply an action ('start', 'complete', or 'abandon') to todo items by 0-based index. Batch operations are atomic — if any index is invalid, no changes are applied.",
     parameters: EditTodosParams,
 
+    // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      // Validate indices parameter
-      if (!params.indices || params.indices.length === 0) {
+      const indices = params.indices as number[] | undefined;
+      if (!indices || indices.length === 0) {
         return makeErrorResult(
           "edit",
           "Error: 'indices' is required for start/complete/abandon actions",
@@ -270,15 +271,7 @@ export function createEditTodosTool(): ToolDefinition<typeof EditTodosParams, To
         );
       }
 
-      // Apply action
       const newStatus = ACTION_TO_STATUS[params.action];
-      if (!newStatus) {
-        return makeErrorResult(
-          "edit",
-          `Error: unknown action '${params.action}'`,
-          `unknown action '${params.action}'`,
-        );
-      }
       updateTodoStatus(params.indices, newStatus);
       updateUI(ctx, getTodos());
 
@@ -296,7 +289,7 @@ export function createEditTodosTool(): ToolDefinition<typeof EditTodosParams, To
     },
 
     renderCall(args, theme) {
-      const indices = `[${(args.indices ?? []).join(", ")}]`;
+      const indices = `[${args.indices.join(", ")}]`;
       return new Text(
         theme.fg("toolTitle", theme.bold("edit_todos ")) +
           theme.fg("warning", `${args.action} `) +

@@ -25,7 +25,6 @@ export function setTodos(newTodos: TodoItem[]): void {
 export function updateTodoStatus(indices: readonly number[], newStatus: TodoStatus): void {
   for (const idx of indices) {
     const item = todos[idx];
-    if (!item) continue;
     todos[idx] = { ...item, status: newStatus };
   }
   autoContinueCount = 0;
@@ -61,7 +60,7 @@ function hasTodoDetails(d: unknown): d is { todos: unknown[] } {
     typeof d === "object" &&
     d !== null &&
     "todos" in d &&
-    Array.isArray((d as { todos: unknown }).todos)
+    Array.isArray((d).todos)
   );
 }
 
@@ -75,7 +74,6 @@ export function reconstructState(ctx: ExtensionContext): TodoItem[] {
 
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
-    if (!entry) continue;
     if (entry.type !== "message") continue;
     const msg = entry.message;
     if (msg.role !== "toolResult") continue;
@@ -110,7 +108,6 @@ export function updateUI(ctx: ExtensionContext, todoList: readonly TodoItem[]): 
 
   for (let i = 0; i < total; i++) {
     const item = todoList[i];
-    if (!item) continue;
     if (item.status === "completed" || item.status === "abandoned") {
       done++;
     }

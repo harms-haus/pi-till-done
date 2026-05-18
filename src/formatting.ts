@@ -24,9 +24,8 @@ export function formatRemainingList(
   return indices
     .map((i) => {
       const todo = todos[i];
-      return todo ? `${getPlainIcon(todo.status)} [${i}] ${todo.text}` : null;
+      return `${getPlainIcon(todo.status)} [${i}] ${todo.text}`;
     })
-    .filter((line): line is string => line !== null)
     .join("\n");
 }
 

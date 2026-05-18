@@ -279,7 +279,7 @@ describe("agent_end handler", () => {
     vi.advanceTimersByTime(3000);
 
     expect(sendUserMessage).toHaveBeenCalled();
-    const prompt = sendUserMessage.mock.calls[0]![0]!;
+    const prompt = sendUserMessage.mock.calls[0][0]!;
     expect(prompt).toContain("edit_todos");
     expect(prompt).toContain("action 'start'");
     expect(prompt).toContain("[1]");
@@ -298,7 +298,7 @@ describe("agent_end handler", () => {
     await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(3000);
 
-    const prompt = sendUserMessage.mock.calls[0]![0]!;
+    const prompt = sendUserMessage.mock.calls[0][0]!;
     const lines = prompt.split("\n");
 
     // Find the instruction line
@@ -458,7 +458,7 @@ describe("agent_end handler", () => {
     await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(3000);
 
-    const prompt = sendUserMessage.mock.calls[0]![0]!;
+    const prompt = sendUserMessage.mock.calls[0][0]!;
     expect(prompt).toContain("Remaining items:");
     expect(prompt).toContain("– [1] task 2");
     expect(prompt).toContain("● [2] task 3");
@@ -477,7 +477,7 @@ describe("agent_end handler", () => {
     await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(3000);
 
-    const prompt = sendUserMessage.mock.calls[0]![0]!;
+    const prompt = sendUserMessage.mock.calls[0][0]!;
     expect(prompt).toContain("Next action: edit_todos with action 'complete' and indices [1]");
   });
 
@@ -545,11 +545,11 @@ describe("agent_end handler", () => {
     ctx.hasUI = false;
     setTodos([{ text: "task 1", status: "not_started" }]);
     registerEventHandlers(api);
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1]! as any;
+    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1]!;
     await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     vi.advanceTimersByTime(3000);
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const prompt = sendUserMessage.mock.calls[0]![0] as string;
+    const prompt = sendUserMessage.mock.calls[0][0] as string;
     expect(prompt).toContain("edit_todos");
     expect(prompt).toContain("action 'start'");
   });

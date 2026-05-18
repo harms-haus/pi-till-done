@@ -50,9 +50,9 @@ describe("state management", () => {
       ];
       setTodos(todos);
       updateTodoStatus([0, 2], "completed");
-      expect(getTodos()[0]!.status).toBe("completed");
-      expect(getTodos()[1]!.status).toBe("not_started");
-      expect(getTodos()[2]!.status).toBe("completed");
+      expect(getTodos()[0].status).toBe("completed");
+      expect(getTodos()[1].status).toBe("not_started");
+      expect(getTodos()[2].status).toBe("completed");
     });
 
     it("does not affect other indices", () => {
@@ -63,9 +63,9 @@ describe("state management", () => {
       ];
       setTodos(todos);
       updateTodoStatus([1], "in_progress");
-      expect(getTodos()[0]!.status).toBe("not_started");
-      expect(getTodos()[1]!.status).toBe("in_progress");
-      expect(getTodos()[2]!.status).toBe("not_started");
+      expect(getTodos()[0].status).toBe("not_started");
+      expect(getTodos()[1].status).toBe("in_progress");
+      expect(getTodos()[2].status).toBe("not_started");
     });
 
     it("resets autoContinueCount to 0", () => {
@@ -390,8 +390,8 @@ describe("reconstructState", () => {
       },
     ]);
     const result = reconstructState(ctx);
-    result[0]!.text = "modified";
-    expect(originalTodos[0]!.text).toBe("task");
+    result[0].text = "modified";
+    expect(originalTodos[0].text).toBe("task");
   });
 
   it("skips results with empty todos array (from list_todos or error paths)", () => {
