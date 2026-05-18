@@ -61,6 +61,8 @@ describe("default export (extension factory)", () => {
       registerMessageRenderer: vi.fn(),
     } as unknown as Parameters<typeof extensionFactory>[0];
 
-    expect(() => { extensionFactory(api); }).not.toThrow();
+    expect(() => {
+      extensionFactory(api);
+    }).not.toThrow();
   });
 });

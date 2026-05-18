@@ -80,11 +80,7 @@ function findNextIncomplete(
 }
 
 /** Schedule auto-continue with countdown UI or timeout fallback. */
-function scheduleAutoContinue(
-  pi: ExtensionAPI,
-  ctx: ExtensionContext,
-  prompt: string,
-): void {
+function scheduleAutoContinue(pi: ExtensionAPI, ctx: ExtensionContext, prompt: string): void {
   if (ctx.hasUI) {
     if (activeCountdown !== null) {
       clearInterval(activeCountdown);
@@ -170,27 +166,15 @@ function handleAgentEnd(
 
 export function registerMessageRenderers(pi: ExtensionAPI): void {
   pi.registerMessageRenderer("til-done-context", (message, _opts, theme) => {
-    return new Text(
-      theme.fg("accent", "📋 ") + theme.fg("dim", message.content as string),
-      0,
-      0,
-    );
+    return new Text(theme.fg("accent", "📋 ") + theme.fg("dim", message.content as string), 0, 0);
   });
 
   pi.registerMessageRenderer("til-done-complete", (message, _opts, theme) => {
-    return new Text(
-      theme.fg("success", "✓ ") + theme.fg("text", message.content as string),
-      0,
-      0,
-    );
+    return new Text(theme.fg("success", "✓ ") + theme.fg("text", message.content as string), 0, 0);
   });
 
   pi.registerMessageRenderer("til-done-countdown", (message, _opts, theme) => {
-    return new Text(
-      theme.fg("accent", "⏳ ") + theme.fg("dim", message.content as string),
-      0,
-      0,
-    );
+    return new Text(theme.fg("accent", "⏳ ") + theme.fg("dim", message.content as string), 0, 0);
   });
 }
 

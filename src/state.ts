@@ -56,12 +56,7 @@ export function resetState(): void {
 // ── State Reconstruction ──
 
 function hasTodoDetails(d: unknown): d is { todos: unknown[] } {
-  return (
-    typeof d === "object" &&
-    d !== null &&
-    "todos" in d &&
-    Array.isArray((d).todos)
-  );
+  return typeof d === "object" && d !== null && "todos" in d && Array.isArray(d.todos);
 }
 
 /**
