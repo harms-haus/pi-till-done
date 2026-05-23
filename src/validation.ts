@@ -30,4 +30,3 @@ export function isIncomplete(status: TodoStatus): boolean {
 export function cloneTodos(todos: readonly TodoItem[]): TodoItem[] {
   return todos.map((t) => ({ text: t.text, status: t.status }));
 }
-

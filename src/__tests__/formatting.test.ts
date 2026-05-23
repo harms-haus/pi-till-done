@@ -53,9 +53,7 @@ describe("formatRemainingList", () => {
       { text: "task 2", status: "completed" },
       { text: "task 3", status: "not_started" },
     ];
-    expect(formatRemainingList(todos, [0, 2, 3])).toBe(
-      "– [0] task 0\n✓ [2] task 2\n– [3] task 3",
-    );
+    expect(formatRemainingList(todos, [0, 2, 3])).toBe("– [0] task 0\n✓ [2] task 2\n– [3] task 3");
   });
 
   it("preserves order from the indices array", () => {
@@ -64,9 +62,7 @@ describe("formatRemainingList", () => {
       { text: "task 1", status: "in_progress" },
       { text: "task 2", status: "completed" },
     ];
-    expect(formatRemainingList(todos, [2, 0, 1])).toBe(
-      "✓ [2] task 2\n– [0] task 0\n● [1] task 1",
-    );
+    expect(formatRemainingList(todos, [2, 0, 1])).toBe("✓ [2] task 2\n– [0] task 0\n● [1] task 1");
   });
 
   it("handles single index", () => {

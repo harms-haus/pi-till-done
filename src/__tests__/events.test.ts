@@ -10,7 +10,10 @@ import { MAX_AUTO_CONTINUE } from "../types";
  * Extract a handler by event name from mock `on` calls.
  * Provides a clear error message if the event was never registered.
  */
-function getHandler(on: ReturnType<typeof vi.fn>, eventName: string): (...args: unknown[]) => unknown {
+function getHandler(
+  on: ReturnType<typeof vi.fn>,
+  eventName: string,
+): (...args: unknown[]) => unknown {
   const calls = on.mock.calls as Array<[string, (...args: unknown[]) => unknown]>;
   const match = calls.find((call) => call[0] === eventName);
   if (!match) {
@@ -265,10 +268,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     expect(sendUserMessage).toHaveBeenCalled();
@@ -288,10 +288,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     const prompt = sendUserMessage.mock.calls[0]?.[0];
@@ -314,10 +311,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(mockApi.api);
 
     const handler = getHandler(mockApi.on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
 
     expect(mockApi.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -332,10 +326,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(mockApi.api);
 
     const handler = getHandler(mockApi.on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
 
     expect(mockApi.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -350,10 +341,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(mockApi.api);
 
     const handler = getHandler(mockApi.on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
 
     expect(mockApi.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -371,10 +359,7 @@ describe("agent_end handler", () => {
 
     // Call handler MAX_AUTO_CONTINUE + 1 times, advancing timers each time
     for (let i = 0; i <= MAX_AUTO_CONTINUE; i++) {
-      await handler(
-        { messages: [{ role: "assistant", stopReason: "stop" }] },
-        {},
-      );
+      await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
       vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     }
 
@@ -399,10 +384,7 @@ describe("agent_end handler", () => {
 
     // Call handler MAX_AUTO_CONTINUE + 1 times, advancing timers each time
     for (let i = 0; i <= MAX_AUTO_CONTINUE; i++) {
-      await handler(
-        { messages: [{ role: "assistant", stopReason: "stop" }] },
-        {},
-      );
+      await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
       vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     }
 
@@ -419,26 +401,17 @@ describe("agent_end handler", () => {
     const handler = getHandler(on, "agent_end");
 
     // First call should work
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
 
     // Second call should also work
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     expect(sendUserMessage).toHaveBeenCalledTimes(2);
 
     // Third call should also work
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     expect(sendUserMessage).toHaveBeenCalledTimes(3);
   });
@@ -452,20 +425,11 @@ describe("agent_end handler", () => {
     const handler = getHandler(on, "agent_end");
 
     // Call multiple times — counter should keep incrementing
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // The counter should have incremented each time.
@@ -485,10 +449,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     const prompt = sendUserMessage.mock.calls[0]?.[0];
@@ -507,10 +468,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      {},
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     const prompt = sendUserMessage.mock.calls[0]?.[0];
@@ -528,10 +486,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "aborted" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "aborted" }] }, ctx);
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     expect(sendUserMessage).not.toHaveBeenCalled();
@@ -553,11 +508,7 @@ describe("agent_end handler", () => {
     // Messages array has user messages after the aborted assistant message
     await handler(
       {
-        messages: [
-          { role: "assistant", stopReason: "stop" },
-          { role: "user" },
-          { role: "user" },
-        ],
+        messages: [{ role: "assistant", stopReason: "stop" }, { role: "user" }, { role: "user" }],
       },
       ctx,
     );
@@ -580,10 +531,7 @@ describe("agent_end handler", () => {
     const handler = getHandler(on, "agent_end");
     await handler(
       {
-        messages: [
-          { role: "assistant", stopReason: "aborted" },
-          { role: "user" },
-        ],
+        messages: [{ role: "assistant", stopReason: "aborted" }, { role: "user" }],
       },
       ctx,
     );
@@ -601,10 +549,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
 
     // Countdown widget should appear immediately with 3s
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
@@ -645,18 +590,12 @@ describe("agent_end handler", () => {
     const handler = getHandler(on, "agent_end");
 
     // Fire first agent_end — starts a countdown
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     // Advance only 1s (countdown still active at 2s)
     vi.advanceTimersByTime(1000);
 
     // Fire second agent_end while first countdown is still active
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
 
     // The second call should clear the old interval and start a new countdown from 3s
     // Check that a "3s" widget appeared after the second call
@@ -684,10 +623,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
@@ -707,10 +643,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
 
     // Widget shows 3s immediately
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
@@ -740,10 +673,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // Called twice: once without options (throws), once with followUp option (succeeds)
@@ -765,10 +695,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // Same fallback behavior as the UI branch
@@ -788,10 +715,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // Both sendUserMessage calls attempted — first without options, then with followUp
@@ -822,10 +746,7 @@ describe("agent_end handler", () => {
     registerEventHandlers(api);
 
     const handler = getHandler(on, "agent_end");
-    await handler(
-      { messages: [{ role: "assistant", stopReason: "stop" }] },
-      ctx,
-    );
+    await handler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
     vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // sendMessage used as last-resort feedback channel

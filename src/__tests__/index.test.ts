@@ -71,9 +71,7 @@ describe("default export (extension factory)", () => {
       return tool.name;
     });
 
-    expect(toolNames).toEqual(
-      expect.arrayContaining(["write_todos", "list_todos", "edit_todos"]),
-    );
+    expect(toolNames).toEqual(expect.arrayContaining(["write_todos", "list_todos", "edit_todos"]));
   });
 
   it("registers tool objects with expected name and label properties", () => {
@@ -81,9 +79,7 @@ describe("default export (extension factory)", () => {
     extensionFactory(api);
 
     const registerTool = api.registerTool as ReturnType<typeof vi.fn>;
-    const tools = registerTool.mock.calls.map(
-      (call) => call[0] as Record<string, unknown>,
-    );
+    const tools = registerTool.mock.calls.map((call) => call[0] as Record<string, unknown>);
 
     const writeTool = tools.find((t) => t["name"] === "write_todos");
     const listTool = tools.find((t) => t["name"] === "list_todos");

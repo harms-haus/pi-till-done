@@ -4,15 +4,13 @@ import { MAX_TODO_TEXT_LENGTH } from "../types";
 
 describe("isValidTodoItem", () => {
   describe("valid inputs", () => {
-    it.each([
-      ["not_started"],
-      ["in_progress"],
-      ["completed"],
-      ["abandoned"],
-    ] as const)("returns true for valid TodoItem with status '%s'", (status) => {
-      const item = { text: "task", status };
-      expect(isValidTodoItem(item)).toBe(true);
-    });
+    it.each([["not_started"], ["in_progress"], ["completed"], ["abandoned"]] as const)(
+      "returns true for valid TodoItem with status '%s'",
+      (status) => {
+        const item = { text: "task", status };
+        expect(isValidTodoItem(item)).toBe(true);
+      },
+    );
 
     it("returns true for text at exactly MAX_TODO_TEXT_LENGTH (1000 chars)", () => {
       const item = {

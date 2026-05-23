@@ -52,11 +52,14 @@ function trySendAutoContinue(pi: ExtensionAPI, prompt: string): void {
     } catch {
       // Last resort — notify the user
       try {
-        pi.sendMessage({
-          customType: "til-done-complete",
-          content: "⚠ Auto-continue failed — you may need to continue manually.",
-          display: true,
-        }, { triggerTurn: false });
+        pi.sendMessage(
+          {
+            customType: "til-done-complete",
+            content: "⚠ Auto-continue failed — you may need to continue manually.",
+            display: true,
+          },
+          { triggerTurn: false },
+        );
       } catch {
         // Completely silent — no way to reach the user
       }
