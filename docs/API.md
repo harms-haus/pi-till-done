@@ -69,8 +69,9 @@ Source: [`src/types.ts`](../src/types.ts)
 | `MAX_TODOS`           | `number`            | `100`                                       | Max items in `write_todos` (TypeBox `maxItems`). Also used for append/insert overflow checks. |
 | `MAX_INDICES`         | `number`            | `50`                                        | Max indices in a single `edit_todos` call (TypeBox `maxItems`).          |
 | `INITIAL_STATUS`      | `TodoStatus`        | `"not_started"`                             | Default status assigned to items created by `write_todos`.               |
-| `VALID_STATUSES`      | `ReadonlySet<string>` | `Set(["not_started","in_progress","completed","abandoned"])` | Runtime validation set used by [`isValidTodoItem`](#isvalidtodoitem). |
-| `TOOL_NAMES`          | `Set<string>`       | `Set(["write_todos","list_todos","edit_todos"])` | Tools that produce `TodoDetails` for state reconstruction.           |
+| `VALID_STATUSES`      | `ReadonlySet<TodoStatus>` | `Set(["not_started","in_progress","completed","abandoned"])` | Runtime validation set used by [`isValidTodoItem`](#isvalidtodoitem). |
+| `TOOL_NAMES`          | `Set<string>`       | `Set(["write_todos", "edit_todos"])` | Tools that produce `TodoDetails` for state reconstruction.           |
+| `COUNTDOWN_SECONDS`   | `number`            | `3`                                      | Duration in seconds for the auto-continue countdown.               |
 
 ---
 
@@ -94,7 +95,7 @@ Plain-text icon for each status. Used by both [plain-text formatting](#6-formatt
 ### `ACTION_TO_STATUS`
 
 ```ts
-const ACTION_TO_STATUS: Record<string, TodoStatus> = {
+const ACTION_TO_STATUS: Record<"start" | "complete" | "abandon", TodoStatus> = {
   start:    "in_progress",
   complete: "completed",
   abandon:  "abandoned",
@@ -106,7 +107,7 @@ Maps an `edit_todos` action string to the resulting `TodoStatus`. Used in [`crea
 ### `ACTION_LABELS`
 
 ```ts
-const ACTION_LABELS: Record<string, string> = {
+const ACTION_LABELS: Record<"start" | "complete" | "abandon", string> = {
   start:    "Started",
   complete: "Completed",
   abandon:  "Abandoned",
@@ -154,10 +155,9 @@ Source: [`src/validation.ts`](../src/validation.ts)
 
 | Export               | Signature                                                                        | Returns          | Description                                                                 |
 |----------------------|----------------------------------------------------------------------------------|------------------|-----------------------------------------------------------------------------|
-| `isValidTodoItem`    | `(t: unknown) => t is TodoItem`                                                 | `boolean` (type guard) | Strict validation: rejects non-objects, null, objects with ≠2 keys, non-string `text`/`status`, invalid status values (checked against [`VALID_STATUSES`](#2-constants)), empty text, or text exceeding [`MAX_TODO_TEXT_LENGTH`](#2-constants). Also rejects extra properties. |
+| `isValidTodoItem`    | `(t: unknown) => t is TodoItem`                                                 | `boolean` (type guard) | Strict validation: rejects non-objects, null, non-string `text`/`status`, invalid status values (checked against [`VALID_STATUSES`](#2-constants)), empty text, or text exceeding [`MAX_TODO_TEXT_LENGTH`](#2-constants). Extra properties are allowed. |
 | `isIncomplete`       | `(status: TodoStatus) => boolean`                                                | `boolean`        | `true` if status is `"not_started"` or `"in_progress"`.                      |
 | `cloneTodos`         | `(todos: readonly TodoItem[]) => TodoItem[]`                                     | `TodoItem[]`     | Deep copy: maps each item to a new `{ text, status }` object.               |
-| `findOversizedItem`  | `(items: readonly { text: string }[], maxLength: number) => number`              | `number`         | Returns index of the first item whose `text.length > maxLength`, or `-1` if all valid. |
 
 ---
 
@@ -224,6 +224,14 @@ Registers **4** event handlers:
 
 The `agent_end` handler uses a module-level `activeCountdown: ReturnType<typeof setInterval> | null` variable to prevent stacked intervals when `agent_end` fires while a previous countdown is still active.
 
+### `clearCountdown`
+
+```ts
+export function clearCountdown(ctx: ExtensionContext): void
+```
+
+Clears any active countdown timers and removes the countdown widget. Called on `session_shutdown` for cleanup.
+
 ---
 
 ## 8. Tools Module (`tools.ts`)
@@ -282,7 +290,7 @@ const EditTodosParams = Type.Object({
 
 | Export                    | Signature                                            | Returns                | Description                                                                 |
 |---------------------------|------------------------------------------------------|------------------------|-----------------------------------------------------------------------------|
-| `createWriteTodosTool`    | `() => ToolDefinition<typeof WriteTodosParams, TodoDetails>` | `ToolDefinition` | Manages the todo list with three modes: **replace** (clears and replaces), **append** (adds to end), **insert** (inserts at index). Validates text length via [`findOversizedItem`](#5-validation-module-validationts); returns error if any item exceeds [`MAX_TODO_TEXT_LENGTH`](#2-constants). Append/insert modes check [`MAX_TODOS`](#2-constants) boundary. Insert validates index range. Calls [`setTodos`](#4-state-module-statets)/[`appendTodos`](#4-state-module-statets)/[`insertTodos`](#4-state-module-statets) and [`updateUI`](#updateui--detail). Returns `{ action: "write", todos, error? }` in `details`. |
+| `createWriteTodosTool`    | `() => ToolDefinition<typeof WriteTodosParams, TodoDetails>` | `ToolDefinition` | Manages the todo list with three modes: **replace** (clears and replaces), **append** (adds to end), **insert** (inserts at index). Validates text length inline; returns error if any item exceeds [`MAX_TODO_TEXT_LENGTH`](#2-constants). Append/insert modes check [`MAX_TODOS`](#2-constants) boundary. Insert validates index range. Calls [`setTodos`](#4-state-module-statets)/[`appendTodos`](#4-state-module-statets)/[`insertTodos`](#4-state-module-statets) and [`updateUI`](#updateui--detail). Returns `{ action: "write", todos, error? }` in `details`. |
 | `createListTodosTool`     | `() => ToolDefinition<typeof ListTodosParams, TodoDetails>`   | `ToolDefinition` | Returns formatted todo list via [`formatTodoListText`](#plain-text-formatting-llm-content). `details` has `action: "list"` and an empty `todos` array (list is read-only, no state change to persist). |
 | `createEditTodosTool`     | `() => ToolDefinition<typeof EditTodosParams, TodoDetails>`   | `ToolDefinition` | Single execution path: applies a status action (`start`/`complete`/`abandon`) to items by index. Requires `indices`, validates range atomically, maps action to status via [`ACTION_TO_STATUS`](#3-lookup-maps), and calls [`updateTodoStatus`](#4-state-module-statets). Calls [`updateUI`](#updateui--detail). Returns `{ action: "edit", todos, error? }` in `details`. |
 

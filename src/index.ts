@@ -17,7 +17,8 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerMessageRenderers, registerEventHandlers } from "./events";
+import { registerMessageRenderers, registerEventHandlers, clearCountdown } from "./events";
+import { resetState } from "./state";
 import { createWriteTodosTool, createListTodosTool, createEditTodosTool } from "./tools";
 
 export default function (pi: ExtensionAPI): void {
@@ -31,4 +32,10 @@ export default function (pi: ExtensionAPI): void {
   pi.registerTool(createWriteTodosTool());
   pi.registerTool(createListTodosTool());
   pi.registerTool(createEditTodosTool());
+
+  // Clean up on session shutdown
+  pi.on("session_shutdown", (_event, ctx) => {
+    clearCountdown(ctx);
+    resetState();
+  });
 }

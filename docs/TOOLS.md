@@ -85,7 +85,7 @@ const WriteTodosParams = Type.Object({
 
 All modes share an initial defense-in-depth check:
 
-1. **Text length validation**: Calls `findOversizedItem(params.todos, 1000)` to scan every item's text length. If any item exceeds 1000 characters, returns immediately with an error message and `details: { action: "write", todos: [], error: "text too long" }`. No state is modified.
+1. **Text length validation**: Scans every item's text length. If any item exceeds 1000 characters, returns immediately with an error message and `details: { action: "write", todos: [], error: "text too long" }`. No state is modified.
 
 After this check, execution branches by mode:
 

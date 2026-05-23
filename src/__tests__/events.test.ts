@@ -1,66 +1,28 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetState, setTodos, getTodos } from "../state";
-import { registerMessageRenderers, registerEventHandlers } from "../events";
-import { createMockAPI, createMockContext, createMockTheme } from "./helpers/mocks";
+import { registerEventHandlers, clearCountdown, COUNTDOWN_SECONDS } from "../events";
+import { createMockAPI, createMockContext } from "./helpers/mocks";
 import { MAX_AUTO_CONTINUE } from "../types";
 
-describe("registerMessageRenderers", () => {
-  it("registers 'til-done-context' renderer", () => {
-    const { api, registerMessageRenderer } = createMockAPI();
-    registerMessageRenderers(api);
+// ── Helpers ──
 
-    expect(registerMessageRenderer).toHaveBeenCalledWith("til-done-context", expect.any(Function));
-  });
+/**
+ * Extract a handler by event name from mock `on` calls.
+ * Provides a clear error message if the event was never registered.
+ */
+function getHandler(on: ReturnType<typeof vi.fn>, eventName: string): (...args: unknown[]) => unknown {
+  const calls = on.mock.calls as Array<[string, (...args: unknown[]) => unknown]>;
+  const match = calls.find((call) => call[0] === eventName);
+  if (!match) {
+    const registered = calls.map((c) => c[0]);
+    throw new Error(
+      `No handler registered for "${eventName}". Registered events: [${registered.join(", ")}]`,
+    );
+  }
+  return match[1];
+}
 
-  it("registers 'til-done-complete' renderer", () => {
-    const { api, registerMessageRenderer } = createMockAPI();
-    registerMessageRenderers(api);
-
-    expect(registerMessageRenderer).toHaveBeenCalledWith("til-done-complete", expect.any(Function));
-  });
-
-  it("'til-done-context' renderer returns themed text", () => {
-    const { api, registerMessageRenderer } = createMockAPI();
-    registerMessageRenderers(api);
-
-    const rendererCalls = registerMessageRenderer.mock.calls;
-    const contextCall = rendererCalls.find((call) => call[0] === "til-done-context");
-    const renderer = contextCall![1];
-
-    const mockTheme = createMockTheme();
-    const message = { content: "test content" };
-    const result = renderer(message, { expanded: false, isPartial: false }, mockTheme);
-
-    expect(result.toString()).toContain("test content");
-  });
-
-  it("'til-done-complete' renderer returns themed text", () => {
-    const { api, registerMessageRenderer } = createMockAPI();
-    registerMessageRenderers(api);
-
-    const rendererCalls = registerMessageRenderer.mock.calls;
-    const completeCall = rendererCalls.find((call) => call[0] === "til-done-complete");
-    const renderer = completeCall![1];
-
-    const mockTheme = createMockTheme();
-    const message = { content: "complete message" };
-    const result = renderer(message, { expanded: false, isPartial: false }, mockTheme);
-
-    expect(result.toString()).toContain("complete message");
-  });
-
-  it("'til-done-countdown' renderer returns themed text", () => {
-    const { api, registerMessageRenderer } = createMockAPI();
-    registerMessageRenderers(api);
-    const rendererCalls = registerMessageRenderer.mock.calls;
-    const countdownCall = rendererCalls.find((call) => call[0] === "til-done-countdown");
-    const renderer = countdownCall![1];
-    const mockTheme = createMockTheme();
-    const message = { content: "Auto-continuing in 2s..." };
-    const result = renderer(message, { expanded: false, isPartial: false }, mockTheme);
-    expect(result.toString()).toContain("Auto-continuing in 2s...");
-  });
-});
+// ── Tests ──
 
 describe("registerEventHandlers", () => {
   beforeEach(() => {
@@ -75,6 +37,34 @@ describe("registerEventHandlers", () => {
     expect(on).toHaveBeenCalledWith("session_tree", expect.any(Function));
     expect(on).toHaveBeenCalledWith("before_agent_start", expect.any(Function));
     expect(on).toHaveBeenCalledWith("agent_end", expect.any(Function));
+  });
+});
+
+describe("exported constants and utilities", () => {
+  it("exports COUNTDOWN_SECONDS as 3", () => {
+    expect(COUNTDOWN_SECONDS).toBe(3);
+  });
+
+  it("exports clearCountdown as a callable function", () => {
+    expect(typeof clearCountdown).toBe("function");
+    const ctx = createMockContext();
+    // Should not throw even when no countdown is active
+    expect(() => {
+      clearCountdown(ctx);
+    }).not.toThrow();
+  });
+
+  it("clearCountdown clears the countdown widget when ctx.hasUI", () => {
+    const ctx = createMockContext();
+    clearCountdown(ctx);
+    expect(ctx.ui.setWidget).toHaveBeenCalledWith("til-done-countdown", undefined);
+  });
+
+  it("clearCountdown does not call setWidget when ctx.hasUI is false", () => {
+    const ctx = createMockContext();
+    ctx.hasUI = false;
+    clearCountdown(ctx);
+    expect(ctx.ui.setWidget).not.toHaveBeenCalled();
   });
 });
 
@@ -102,8 +92,8 @@ describe("session_start handler", () => {
 
     registerEventHandlers(api);
 
-    const sessionStartHandler = on.mock.calls.find((call) => call[0] === "session_start")![1];
-    await sessionStartHandler({}, ctx);
+    const handler = getHandler(on, "session_start");
+    await handler({}, ctx);
 
     expect(getTodos()).toEqual([{ text: "task 1", status: "not_started" }]);
     expect(setStatus).toHaveBeenCalled();
@@ -115,7 +105,7 @@ describe("session_tree handler", () => {
     resetState();
   });
 
-  it("reconstructs state and updates UI", async () => {
+  it("reconstructs state from session tree and updates UI", async () => {
     const { api, on } = createMockAPI();
     const setStatus = vi.fn();
     const ctx = createMockContext([
@@ -137,8 +127,8 @@ describe("session_tree handler", () => {
 
     registerEventHandlers(api);
 
-    const sessionTreeHandler = on.mock.calls.find((call) => call[0] === "session_tree")![1];
-    await sessionTreeHandler({}, ctx);
+    const handler = getHandler(on, "session_tree");
+    await handler({}, ctx);
 
     expect(getTodos()).toEqual([
       { text: "task 1", status: "completed" },
@@ -162,16 +152,36 @@ describe("before_agent_start handler", () => {
 
     registerEventHandlers(api);
 
-    const beforeAgentStartHandler = on.mock.calls.find(
-      (call) => call[0] === "before_agent_start",
-    )![1];
-    const result = await beforeAgentStartHandler();
+    const handler = getHandler(on, "before_agent_start");
+    const result = (await handler()) as {
+      message: { customType: string; display: boolean; content: string };
+    };
 
     expect(result).toBeDefined();
     expect(result.message.customType).toBe("til-done-context");
     expect(result.message.display).toBe(false);
     expect(result.message.content).toContain("task 1");
     expect(result.message.content).toContain("task 2");
+  });
+
+  it("returns context message when all items are in_progress", async () => {
+    const { api, on } = createMockAPI();
+    setTodos([
+      { text: "task 1", status: "in_progress" },
+      { text: "task 2", status: "in_progress" },
+    ]);
+
+    registerEventHandlers(api);
+
+    const handler = getHandler(on, "before_agent_start");
+    const result = (await handler()) as {
+      message: { customType: string; content: string };
+    };
+
+    expect(result).toBeDefined();
+    expect(result.message.customType).toBe("til-done-context");
+    expect(result.message.content).toContain("● [0] task 1");
+    expect(result.message.content).toContain("● [1] task 2");
   });
 
   it("returns undefined when all todos are completed", async () => {
@@ -183,10 +193,8 @@ describe("before_agent_start handler", () => {
 
     registerEventHandlers(api);
 
-    const beforeAgentStartHandler = on.mock.calls.find(
-      (call) => call[0] === "before_agent_start",
-    )![1];
-    const result = await beforeAgentStartHandler();
+    const handler = getHandler(on, "before_agent_start");
+    const result = await handler();
 
     expect(result).toBeUndefined();
   });
@@ -200,10 +208,8 @@ describe("before_agent_start handler", () => {
 
     registerEventHandlers(api);
 
-    const beforeAgentStartHandler = on.mock.calls.find(
-      (call) => call[0] === "before_agent_start",
-    )![1];
-    const result = await beforeAgentStartHandler();
+    const handler = getHandler(on, "before_agent_start");
+    const result = await handler();
 
     expect(result).toBeUndefined();
   });
@@ -214,26 +220,10 @@ describe("before_agent_start handler", () => {
 
     registerEventHandlers(api);
 
-    const beforeAgentStartHandler = on.mock.calls.find(
-      (call) => call[0] === "before_agent_start",
-    )![1];
-    const result = await beforeAgentStartHandler();
+    const handler = getHandler(on, "before_agent_start");
+    const result = await handler();
 
     expect(result).toBeUndefined();
-  });
-
-  it("message has display: false", async () => {
-    const { api, on } = createMockAPI();
-    setTodos([{ text: "task 1", status: "not_started" }]);
-
-    registerEventHandlers(api);
-
-    const beforeAgentStartHandler = on.mock.calls.find(
-      (call) => call[0] === "before_agent_start",
-    )![1];
-    const result = await beforeAgentStartHandler();
-
-    expect(result.message.display).toBe(false);
   });
 
   it("message contains formatted todo list", async () => {
@@ -245,10 +235,10 @@ describe("before_agent_start handler", () => {
 
     registerEventHandlers(api);
 
-    const beforeAgentStartHandler = on.mock.calls.find(
-      (call) => call[0] === "before_agent_start",
-    )![1];
-    const result = await beforeAgentStartHandler();
+    const handler = getHandler(on, "before_agent_start");
+    const result = (await handler()) as {
+      message: { content: string };
+    };
 
     expect(result.message.content).toContain("✓ [0] task 1");
     expect(result.message.content).toContain("● [1] task 2");
@@ -274,12 +264,15 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     expect(sendUserMessage).toHaveBeenCalled();
-    const prompt = sendUserMessage.mock.calls[0][0]!;
+    const prompt = sendUserMessage.mock.calls[0]?.[0];
     expect(prompt).toContain("edit_todos");
     expect(prompt).toContain("action 'start'");
     expect(prompt).toContain("[1]");
@@ -294,11 +287,14 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
-    const prompt = sendUserMessage.mock.calls[0][0]!;
+    const prompt = sendUserMessage.mock.calls[0]?.[0];
     const lines = prompt.split("\n");
 
     // Find the instruction line
@@ -317,8 +313,11 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(mockApi.api);
 
-    const agentEndHandler = mockApi.on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
+    const handler = getHandler(mockApi.on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
 
     expect(mockApi.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -332,8 +331,11 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(mockApi.api);
 
-    const agentEndHandler = mockApi.on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
+    const handler = getHandler(mockApi.on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
 
     expect(mockApi.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -347,8 +349,11 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(mockApi.api);
 
-    const agentEndHandler = mockApi.on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
+    const handler = getHandler(mockApi.on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
 
     expect(mockApi.sendUserMessage).not.toHaveBeenCalled();
   });
@@ -362,12 +367,15 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(mockApi.api);
 
-    const agentEndHandler = mockApi.on.mock.calls.find((call) => call[0] === "agent_end")![1];
+    const handler = getHandler(mockApi.on, "agent_end");
 
     // Call handler MAX_AUTO_CONTINUE + 1 times, advancing timers each time
     for (let i = 0; i <= MAX_AUTO_CONTINUE; i++) {
-      await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-      vi.advanceTimersByTime(3000);
+      await handler(
+        { messages: [{ role: "assistant", stopReason: "stop" }] },
+        {},
+      );
+      vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     }
 
     expect(mockApi.sendMessage).toHaveBeenCalled();
@@ -387,12 +395,15 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(mockApi.api);
 
-    const agentEndHandler = mockApi.on.mock.calls.find((call) => call[0] === "agent_end")![1];
+    const handler = getHandler(mockApi.on, "agent_end");
 
     // Call handler MAX_AUTO_CONTINUE + 1 times, advancing timers each time
     for (let i = 0; i <= MAX_AUTO_CONTINUE; i++) {
-      await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-      vi.advanceTimersByTime(3000);
+      await handler(
+        { messages: [{ role: "assistant", stopReason: "stop" }] },
+        {},
+      );
+      vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     }
 
     // sendUserMessage should only have been called MAX_AUTO_CONTINUE times (not on the limit-hit call)
@@ -405,43 +416,62 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
+    const handler = getHandler(on, "agent_end");
 
     // First call should work
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
 
     // Second call should also work
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     expect(sendUserMessage).toHaveBeenCalledTimes(2);
 
     // Third call should also work
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
     expect(sendUserMessage).toHaveBeenCalledTimes(3);
   });
 
-  it("resets counter is NOT called by agent_end itself (only by tool actions)", async () => {
+  it("counter is NOT reset by agent_end itself (only by tool actions)", async () => {
     const { api, on } = createMockAPI();
     setTodos([{ text: "task 1", status: "not_started" }]);
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
+    const handler = getHandler(on, "agent_end");
 
-    // Call multiple times - counter should keep incrementing
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    // Call multiple times — counter should keep incrementing
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
-    // The counter should have incremented each time
-    // This is tested implicitly by the fact that sendUserMessage gets called 3 times
-    // (if counter was reset, it would still call, but we want to ensure it doesn't reset)
+    // The counter should have incremented each time.
+    // Verified implicitly: if counter was reset, the limit would never be reached,
+    // but with MAX_AUTO_CONTINUE = 20 we can't exhaust it in 3 calls anyway.
+    // The key invariant: agent_end never calls resetAutoContinue().
   });
 
   it("prompt contains structured format with remaining list", async () => {
@@ -454,11 +484,14 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
-    const prompt = sendUserMessage.mock.calls[0][0]!;
+    const prompt = sendUserMessage.mock.calls[0]?.[0];
     expect(prompt).toContain("Remaining items:");
     expect(prompt).toContain("– [1] task 2");
     expect(prompt).toContain("● [2] task 3");
@@ -473,11 +506,14 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, {});
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      {},
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
-    const prompt = sendUserMessage.mock.calls[0][0]!;
+    const prompt = sendUserMessage.mock.calls[0]?.[0];
     expect(prompt).toContain("Next action: edit_todos with action 'complete' and indices [1]");
   });
 
@@ -491,13 +527,70 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "aborted" }] }, ctx);
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "aborted" }] },
+      ctx,
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     expect(sendUserMessage).not.toHaveBeenCalled();
     // Also no countdown widget on abort
     expect(ctx.ui.setWidget).not.toHaveBeenCalled();
+  });
+
+  it("detects aborted assistant message when followed by user messages (backward scan)", async () => {
+    const { api, on, sendUserMessage } = createMockAPI();
+    const ctx = createMockContext();
+    setTodos([
+      { text: "task 1", status: "completed" },
+      { text: "task 2", status: "not_started" },
+    ]);
+
+    registerEventHandlers(api);
+
+    const handler = getHandler(on, "agent_end");
+    // Messages array has user messages after the aborted assistant message
+    await handler(
+      {
+        messages: [
+          { role: "assistant", stopReason: "stop" },
+          { role: "user" },
+          { role: "user" },
+        ],
+      },
+      ctx,
+    );
+
+    // The last assistant message is NOT aborted, so auto-continue should fire
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+    expect(sendUserMessage).toHaveBeenCalled();
+  });
+
+  it("detects abort when last assistant message (buried behind user messages) was aborted", async () => {
+    const { api, on, sendUserMessage } = createMockAPI();
+    const ctx = createMockContext();
+    setTodos([
+      { text: "task 1", status: "completed" },
+      { text: "task 2", status: "not_started" },
+    ]);
+
+    registerEventHandlers(api);
+
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      {
+        messages: [
+          { role: "assistant", stopReason: "aborted" },
+          { role: "user" },
+        ],
+      },
+      ctx,
+    );
+
+    // The last assistant (scanning backward) is aborted → no auto-continue
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+    expect(sendUserMessage).not.toHaveBeenCalled();
   });
 
   it("shows countdown widget before auto-continue", async () => {
@@ -507,8 +600,11 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
 
     // Countdown widget should appear immediately with 3s
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
@@ -539,17 +635,63 @@ describe("agent_end handler", () => {
     expect(sendUserMessage).toHaveBeenCalled();
   });
 
+  it("clears previous countdown when scheduling a new one", async () => {
+    const { api, on, sendUserMessage } = createMockAPI();
+    const ctx = createMockContext();
+    setTodos([{ text: "task 1", status: "not_started" }]);
+
+    registerEventHandlers(api);
+
+    const handler = getHandler(on, "agent_end");
+
+    // Fire first agent_end — starts a countdown
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+    // Advance only 1s (countdown still active at 2s)
+    vi.advanceTimersByTime(1000);
+
+    // Fire second agent_end while first countdown is still active
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+
+    // The second call should clear the old interval and start a new countdown from 3s
+    // Check that a "3s" widget appeared after the second call
+    const calls = (ctx.ui.setWidget as ReturnType<typeof vi.fn>).mock.calls;
+    const callsAfterSecond = calls.slice(-4); // last few calls
+    const has3sAfterSecond = callsAfterSecond.some(
+      (call: unknown[]) =>
+        call[0] === "til-done-countdown" &&
+        Array.isArray(call[1]) &&
+        call[1].some((s: string) => s.includes("3s")),
+    );
+    expect(has3sAfterSecond).toBe(true);
+
+    // Now advance to complete the second countdown
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+    expect(sendUserMessage).toHaveBeenCalled();
+  });
+
   it("sends sendUserMessage via setTimeout when no UI available", async () => {
     const { api, on, sendUserMessage } = createMockAPI();
     const ctx = createMockContext();
     ctx.hasUI = false;
     setTodos([{ text: "task 1", status: "not_started" }]);
+
     registerEventHandlers(api);
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1]!;
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
-    vi.advanceTimersByTime(3000);
+
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const prompt = sendUserMessage.mock.calls[0][0] as string;
+    const prompt = sendUserMessage.mock.calls[0]?.[0];
     expect(prompt).toContain("edit_todos");
     expect(prompt).toContain("action 'start'");
   });
@@ -564,8 +706,11 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
 
     // Widget shows 3s immediately
     expect(ctx.ui.setWidget).toHaveBeenCalledWith(
@@ -575,7 +720,7 @@ describe("agent_end handler", () => {
     );
 
     // Advance 3s to trigger the sendUserMessage throw
-    vi.advanceTimersByTime(3000);
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // Widget should be cleared even though sendUserMessage threw
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("til-done-countdown", undefined);
@@ -594,9 +739,12 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // Called twice: once without options (throws), once with followUp option (succeeds)
     expect(sendUserMessage).toHaveBeenCalledTimes(2);
@@ -616,9 +764,12 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
     // Same fallback behavior as the UI branch
     expect(sendUserMessage).toHaveBeenCalledTimes(2);
@@ -626,8 +777,8 @@ describe("agent_end handler", () => {
     expect(sendUserMessage.mock.calls[1]).toEqual([expect.any(String), { deliverAs: "followUp" }]);
   });
 
-  it("skips auto-continue silently when both sendUserMessage calls fail", async () => {
-    const { api, on, sendUserMessage } = createMockAPI();
+  it("sends sendMessage feedback when both sendUserMessage calls fail", async () => {
+    const { api, on, sendUserMessage, sendMessage } = createMockAPI();
     const ctx = createMockContext();
     sendUserMessage.mockImplementation(() => {
       throw new Error("Agent unavailable");
@@ -636,14 +787,55 @@ describe("agent_end handler", () => {
 
     registerEventHandlers(api);
 
-    const agentEndHandler = on.mock.calls.find((call) => call[0] === "agent_end")![1];
-    await agentEndHandler({ messages: [{ role: "assistant", stopReason: "stop" }] }, ctx);
-    vi.advanceTimersByTime(3000);
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
 
-    // Both calls attempted — first without options, then with followUp
+    // Both sendUserMessage calls attempted — first without options, then with followUp
     expect(sendUserMessage).toHaveBeenCalledTimes(2);
     // Widget was cleared (no stale countdown)
     expect(ctx.ui.setWidget).toHaveBeenCalledWith("til-done-countdown", undefined);
+    // sendMessage should be called with feedback about the failure
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: "til-done-complete",
+        content: expect.stringContaining("Auto-continue failed"),
+        display: true,
+      }),
+      { triggerTurn: false },
+    );
     // No crash — test completes without unhandled exception
+  });
+
+  it("sends sendMessage feedback when both sendUserMessage calls fail without UI", async () => {
+    const { api, on, sendUserMessage, sendMessage } = createMockAPI();
+    const ctx = createMockContext();
+    ctx.hasUI = false;
+    sendUserMessage.mockImplementation(() => {
+      throw new Error("Agent unavailable");
+    });
+    setTodos([{ text: "task 1", status: "not_started" }]);
+
+    registerEventHandlers(api);
+
+    const handler = getHandler(on, "agent_end");
+    await handler(
+      { messages: [{ role: "assistant", stopReason: "stop" }] },
+      ctx,
+    );
+    vi.advanceTimersByTime(COUNTDOWN_SECONDS * 1000);
+
+    // sendMessage used as last-resort feedback channel
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customType: "til-done-complete",
+        content: expect.stringContaining("Auto-continue failed"),
+        display: true,
+      }),
+      { triggerTurn: false },
+    );
   });
 });

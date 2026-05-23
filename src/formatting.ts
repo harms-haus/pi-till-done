@@ -10,10 +10,15 @@ export function getPlainIcon(status: TodoStatus): string {
   return STATUS_ICONS[status];
 }
 
+/** Formats a single todo item as plain text */
+function formatItem(todo: TodoItem, index: number): string {
+  return `${getPlainIcon(todo.status)} [${index}] ${todo.text}`;
+}
+
 /** Formats the full todo list as plain text for LLM consumption */
 export function formatTodoListText(todos: readonly TodoItem[]): string {
   if (todos.length === 0) return "No todos";
-  return todos.map((t, i) => `${getPlainIcon(t.status)} [${i}] ${t.text}`).join("\n");
+  return todos.map((t, i) => formatItem(t, i)).join("\n");
 }
 
 /** Formats a subset of todos (by index) as plain text for remaining-item display */
@@ -21,12 +26,12 @@ export function formatRemainingList(
   todos: readonly TodoItem[],
   indices: readonly number[],
 ): string {
-  return indices
-    .map((i) => {
-      const todo = todos[i];
-      return `${getPlainIcon(todo.status)} [${i}] ${todo.text}`;
-    })
-    .join("\n");
+  const result: string[] = [];
+  for (const i of indices) {
+    const todo = todos[i];
+    if (todo) result.push(formatItem(todo, i));
+  }
+  return result.join("\n");
 }
 
 // ── Themed Formatting (for TUI rendering) ──
@@ -77,6 +82,7 @@ export function renderToolResult(
   theme: Theme,
   _context: unknown,
 ): Text {
+  // Cast is safe — tool execute functions return TypedToolResult with TodoDetails
   const details = result.details as TodoDetails | undefined;
   if (!details) {
     const text = result.content[0]?.text ?? "";

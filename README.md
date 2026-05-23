@@ -1,7 +1,7 @@
 # pi-til-done
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 
 A pi-coding-agent extension that provides an iterative todo list — tracks tasks and automatically loops the agent until every task is marked done.
 

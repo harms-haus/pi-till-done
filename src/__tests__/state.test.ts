@@ -18,11 +18,7 @@ describe("state management", () => {
     resetState();
   });
 
-  describe("getTodos / setTodos", () => {
-    it("getTodos returns empty array initially", () => {
-      expect(getTodos()).toEqual([]);
-    });
-
+  describe("setTodos", () => {
     it("setTodos replaces todos and getTodos returns them", () => {
       const newTodos: TodoItem[] = [
         { text: "task 1", status: "not_started" },
@@ -50,9 +46,10 @@ describe("state management", () => {
       ];
       setTodos(todos);
       updateTodoStatus([0, 2], "completed");
-      expect(getTodos()[0].status).toBe("completed");
-      expect(getTodos()[1].status).toBe("not_started");
-      expect(getTodos()[2].status).toBe("completed");
+      const current = getTodos();
+      expect(current[0]!.status).toBe("completed");
+      expect(current[1]!.status).toBe("not_started");
+      expect(current[2]!.status).toBe("completed");
     });
 
     it("does not affect other indices", () => {
@@ -63,9 +60,10 @@ describe("state management", () => {
       ];
       setTodos(todos);
       updateTodoStatus([1], "in_progress");
-      expect(getTodos()[0].status).toBe("not_started");
-      expect(getTodos()[1].status).toBe("in_progress");
-      expect(getTodos()[2].status).toBe("not_started");
+      const current = getTodos();
+      expect(current[0]!.status).toBe("not_started");
+      expect(current[1]!.status).toBe("in_progress");
+      expect(current[2]!.status).toBe("not_started");
     });
 
     it("resets autoContinueCount to 0", () => {
@@ -77,6 +75,46 @@ describe("state management", () => {
       updateTodoStatus([0], "completed");
       expect(incrementAutoContinue()).toBe(1); // Counter reset to 0
     });
+
+    it("silently skips out-of-bounds index [999]", () => {
+      const todos: TodoItem[] = [
+        { text: "task 1", status: "not_started" },
+        { text: "task 2", status: "not_started" },
+      ];
+      setTodos(todos);
+      updateTodoStatus([999], "completed");
+      const current = getTodos();
+      expect(current[0]!.status).toBe("not_started");
+      expect(current[1]!.status).toBe("not_started");
+      expect(current.length).toBe(2);
+    });
+
+    it("silently skips negative index [-1]", () => {
+      const todos: TodoItem[] = [
+        { text: "task 1", status: "not_started" },
+        { text: "task 2", status: "not_started" },
+      ];
+      setTodos(todos);
+      updateTodoStatus([-1], "completed");
+      const current = getTodos();
+      expect(current[0]!.status).toBe("not_started");
+      expect(current[1]!.status).toBe("not_started");
+      expect(current.length).toBe(2);
+    });
+
+    it("handles mixed valid + invalid indices [0, 999, 1]", () => {
+      const todos: TodoItem[] = [
+        { text: "task 1", status: "not_started" },
+        { text: "task 2", status: "not_started" },
+        { text: "task 3", status: "not_started" },
+      ];
+      setTodos(todos);
+      updateTodoStatus([0, 999, 1], "completed");
+      const current = getTodos();
+      expect(current[0]!.status).toBe("completed");
+      expect(current[1]!.status).toBe("completed");
+      expect(current[2]!.status).toBe("not_started");
+    });
   });
 
   describe("incrementAutoContinue", () => {
@@ -87,13 +125,6 @@ describe("state management", () => {
     it("increments from 1 to 2, returns 2", () => {
       incrementAutoContinue();
       expect(incrementAutoContinue()).toBe(2);
-    });
-
-    it("accumulates across calls", () => {
-      expect(incrementAutoContinue()).toBe(1);
-      expect(incrementAutoContinue()).toBe(2);
-      expect(incrementAutoContinue()).toBe(3);
-      expect(incrementAutoContinue()).toBe(4);
     });
   });
 
@@ -350,7 +381,7 @@ describe("reconstructState", () => {
     ]);
   });
 
-  it("filters out items with extra properties", () => {
+  it("strips extra properties from items that pass validation", () => {
     const ctx = createMockContext([
       {
         type: "message",
@@ -364,9 +395,9 @@ describe("reconstructState", () => {
                 status: "not_started",
               },
               {
-                text: "invalid task",
+                text: "task with extra",
                 status: "not_started",
-                extra: "property", // Extra property makes this invalid
+                extra: "property", // Extra property gets stripped during reconstruction
               } as unknown,
             ],
           },
@@ -374,7 +405,11 @@ describe("reconstructState", () => {
       },
     ]);
     const result = reconstructState(ctx);
-    expect(result).toEqual([{ text: "valid task", status: "not_started" }]);
+    // Both items pass validation; extra properties are stripped
+    expect(result).toEqual([
+      { text: "valid task", status: "not_started" },
+      { text: "task with extra", status: "not_started" },
+    ]);
   });
 
   it("returns deep copies (not original references)", () => {
@@ -390,8 +425,10 @@ describe("reconstructState", () => {
       },
     ]);
     const result = reconstructState(ctx);
-    result[0].text = "modified";
-    expect(originalTodos[0].text).toBe("task");
+    const first = result[0]!;
+    expect(first).toBeDefined();
+    first.text = "modified";
+    expect(originalTodos[0]!.text).toBe("task");
   });
 
   it("skips results with empty todos array (from list_todos or error paths)", () => {
@@ -417,6 +454,51 @@ describe("reconstructState", () => {
     ]);
     const result = reconstructState(ctx);
     expect(result).toEqual([{ text: "task", status: "not_started" }]);
+  });
+
+  it("handles details.todos being a non-array (string)", () => {
+    const ctx = createMockContext([
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "write_todos",
+          details: { todos: "not an array" },
+        },
+      },
+    ]);
+    const result = reconstructState(ctx);
+    expect(result).toEqual([]);
+  });
+
+  it("handles details being null", () => {
+    const ctx = createMockContext([
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "write_todos",
+          details: null,
+        },
+      },
+    ]);
+    const result = reconstructState(ctx);
+    expect(result).toEqual([]);
+  });
+
+  it("handles details being a primitive", () => {
+    const ctx = createMockContext([
+      {
+        type: "message",
+        message: {
+          role: "toolResult",
+          toolName: "write_todos",
+          details: 42,
+        },
+      },
+    ]);
+    const result = reconstructState(ctx);
+    expect(result).toEqual([]);
   });
 });
 

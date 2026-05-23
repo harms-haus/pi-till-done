@@ -8,7 +8,7 @@
 | **Config file** | `vitest.config.ts` |
 | **Test file pattern** | `src/**/*.test.ts` |
 | **Setup file** | `src/__tests__/setup.ts` |
-| **Total tests** | 194 (across 6 test files, all passing) |
+| **Total tests** | 201 (across 6 test files, all passing) |
 
 ### Run Commands
 
@@ -345,15 +345,6 @@ Returns `true` for `not_started` and `in_progress`; `false` for `completed` and 
 - Returns empty array for empty input (new array, not same reference)
 - Handles multiple items correctly (each item is a new reference)
 
-#### `findOversizedItem` (8 tests)
-- Returns `-1` when all items within limit
-- Returns `0` for first oversized item
-- Returns correct index for middle and last oversized items
-- Returns `0` (first match) when multiple items are oversized
-- Returns `-1` for empty array
-- Respects custom `maxLength` parameter
-- Returns `-1` when all items are exactly at the limit
-
 ## Security Test
 
 ### SEC-CRIT-01: Todo text not interpolated into instruction
@@ -369,7 +360,7 @@ expect(instructionLine).not.toContain("task 2");  // todo.text must not appear
 
 ## Coverage Notes
 
-- **Coverage is configured** via `@vitest/coverage-v8` in `vitest.config.ts`. Thresholds are set to **80%** across branches, functions, lines, and statements. Run `npm run test:coverage` to generate a coverage report.
+- **Coverage is configured** via `@vitest/coverage-v8` in `vitest.config.ts`. Thresholds are set to **90%** across branches, functions, lines, and statements. Run `npm run test:coverage` to generate a coverage report.
 
 ## Cross-References
 

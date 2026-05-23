@@ -11,7 +11,7 @@ import {
   MAX_TODO_TEXT_LENGTH,
   MAX_TODOS,
 } from "./types";
-import { cloneTodos, findOversizedItem } from "./validation";
+import { cloneTodos } from "./validation";
 import { formatTodoListText, renderToolResult } from "./formatting";
 import { getTodos, setTodos, appendTodos, insertTodos, updateTodoStatus, updateUI } from "./state";
 
@@ -41,7 +41,7 @@ const EditTodosParams = Type.Object({
   action: StringEnum(["start", "complete", "abandon"] as const, {
     description: "Action to apply to the todo items",
   }),
-  indices: Type.Array(Type.Integer(), {
+  indices: Type.Array(Type.Integer({ minimum: 0 }), {
     description: "0-based indices to apply the action to",
     minItems: 1,
     maxItems: MAX_INDICES,
@@ -63,6 +63,16 @@ function makeErrorResult(
 
 function toNewItems(items: readonly { text: string }[]): TodoItem[] {
   return items.map((t) => ({ text: t.text, status: INITIAL_STATUS }));
+}
+
+type WriteResult = { content: Array<{ type: "text"; text: string }>; details: TodoDetails };
+
+function writeSuccessResult(ctx: ExtensionContext, message: string): WriteResult {
+  updateUI(ctx, getTodos());
+  return {
+    content: [{ type: "text" as const, text: message + "\n\n" + formatTodoListText(getTodos()) }],
+    details: { action: "write" as const, todos: cloneTodos(getTodos()) },
+  };
 }
 
 /** Handle insert mode for write_todos execute. */
@@ -100,17 +110,8 @@ function handleInsertMode(
 
   const newItems: TodoItem[] = toNewItems(params.todos);
   insertTodos(params.index, newItems);
-  updateUI(ctx, getTodos());
 
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Inserted ${newItems.length} item(s) at index ${params.index}\n\n${formatTodoListText(getTodos())}`,
-      },
-    ],
-    details: { action: "write" as const, todos: cloneTodos(getTodos()) },
-  };
+  return writeSuccessResult(ctx, `Inserted ${newItems.length} item(s) at index ${params.index}`);
 }
 
 // ── Tool Factories ──
@@ -138,11 +139,11 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
     // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       // Defense-in-depth text length check
-      const oversizedIdx = findOversizedItem(params.todos, MAX_TODO_TEXT_LENGTH);
-      if (oversizedIdx !== -1) {
+      const oversizedIdx = params.todos.findIndex((t) => t.text.length > MAX_TODO_TEXT_LENGTH);
+      if (oversizedIdx >= 0) {
         return makeErrorResult(
           "write",
-          `Error: todo item at index ${oversizedIdx} exceeds maximum text length (${MAX_TODO_TEXT_LENGTH} characters)`,
+          `Item ${oversizedIdx + 1} text exceeds ${MAX_TODO_TEXT_LENGTH} characters.`,
           "text too long",
         );
       }
@@ -152,17 +153,8 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
       if (params.mode === "replace") {
         const newTodos = toNewItems(params.todos);
         setTodos(newTodos);
-        updateUI(ctx, getTodos());
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Wrote ${newTodos.length} todo item(s)\n\n${formatTodoListText(getTodos())}`,
-            },
-          ],
-          details: { action: "write" as const, todos: cloneTodos(getTodos()) },
-        };
+        return writeSuccessResult(ctx, `Wrote ${newTodos.length} todo item(s)`);
       }
 
       if (params.mode === "append") {
@@ -176,17 +168,8 @@ export function createWriteTodosTool(): ToolDefinition<typeof WriteTodosParams, 
 
         const newItems: TodoItem[] = toNewItems(params.todos);
         appendTodos(newItems);
-        updateUI(ctx, getTodos());
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Appended ${newItems.length} item(s)\n\n${formatTodoListText(getTodos())}`,
-            },
-          ],
-          details: { action: "write" as const, todos: cloneTodos(getTodos()) },
-        };
+        return writeSuccessResult(ctx, `Appended ${newItems.length} item(s)`);
       }
 
       // Mode is narrowed to "insert" after replace/append branches
@@ -246,23 +229,15 @@ export function createEditTodosTool(): ToolDefinition<typeof EditTodosParams, To
 
     // eslint-disable-next-line @typescript-eslint/require-await
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const indices = params.indices as number[] | undefined;
-      if (!indices || indices.length === 0) {
-        return makeErrorResult(
-          "edit",
-          "Error: 'indices' is required for start/complete/abandon actions",
-          "indices required",
-        );
-      }
-
       const currentTodos = getTodos();
 
       if (currentTodos.length === 0) {
         return makeErrorResult("edit", "Error: no todos exist", "no todos exist");
       }
 
-      // Validate all indices atomically
-      const invalid = params.indices.filter((i) => i < 0 || i >= currentTodos.length);
+      // Deduplicate and validate all indices atomically
+      const uniqueIndices = [...new Set(params.indices)];
+      const invalid = uniqueIndices.filter((i) => i < 0 || i >= currentTodos.length);
       if (invalid.length > 0) {
         return makeErrorResult(
           "edit",
@@ -272,7 +247,7 @@ export function createEditTodosTool(): ToolDefinition<typeof EditTodosParams, To
       }
 
       const newStatus = ACTION_TO_STATUS[params.action];
-      updateTodoStatus(params.indices, newStatus);
+      updateTodoStatus(uniqueIndices, newStatus);
       updateUI(ctx, getTodos());
 
       const actionLabel = ACTION_LABELS[params.action];
@@ -281,7 +256,7 @@ export function createEditTodosTool(): ToolDefinition<typeof EditTodosParams, To
         content: [
           {
             type: "text" as const,
-            text: `${actionLabel} [${params.indices.join(", ")}]\n\n${formatTodoListText(getTodos())}`,
+            text: `${actionLabel} [${uniqueIndices.join(", ")}]\n\n${formatTodoListText(getTodos())}`,
           },
         ],
         details: { action: "edit" as const, todos: cloneTodos(getTodos()) },

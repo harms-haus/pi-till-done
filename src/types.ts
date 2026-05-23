@@ -32,7 +32,7 @@ export const MAX_INDICES = 50;
 export const INITIAL_STATUS: TodoStatus = "not_started";
 
 /** Set of valid TodoStatus values for runtime validation */
-export const VALID_STATUSES: ReadonlySet<string> = new Set<TodoStatus>([
+export const VALID_STATUSES: ReadonlySet<TodoStatus> = new Set<TodoStatus>([
   "not_started",
   "in_progress",
   "completed",
@@ -40,7 +40,7 @@ export const VALID_STATUSES: ReadonlySet<string> = new Set<TodoStatus>([
 ]);
 
 /** Tool names that produce TodoDetails for state reconstruction */
-export const TOOL_NAMES = new Set(["write_todos", "list_todos", "edit_todos"]);
+export const TOOL_NAMES = new Set(["write_todos", "edit_todos"]);
 
 // ── Lookup Maps (single source of truth for all mappings) ──
 
@@ -53,14 +53,14 @@ export const STATUS_ICONS: Record<TodoStatus, string> = {
 };
 
 /** edit_todos action → resulting TodoStatus */
-export const ACTION_TO_STATUS: Record<string, TodoStatus> = {
+export const ACTION_TO_STATUS: Record<"start" | "complete" | "abandon", TodoStatus> = {
   start: "in_progress",
   complete: "completed",
   abandon: "abandoned",
 };
 
 /** edit_todos action → human-readable past-tense label */
-export const ACTION_LABELS: Record<string, string> = {
+export const ACTION_LABELS: Record<"start" | "complete" | "abandon", string> = {
   start: "Started",
   complete: "Completed",
   abandon: "Abandoned",

@@ -13,8 +13,11 @@ let activeCountdown: ReturnType<typeof setInterval> | null = null;
 // Module-level timeout handle — tracks setTimeout in no-UI fallback path
 let activeTimeout: ReturnType<typeof setTimeout> | null = null;
 
+/** Countdown duration in seconds for auto-continue. */
+export const COUNTDOWN_SECONDS = 3;
+
 /** Clear any active countdown interval, timeout, and remove the countdown widget. */
-function clearCountdown(ctx: ExtensionContext): void {
+export function clearCountdown(ctx: ExtensionContext): void {
   if (activeCountdown !== null) {
     clearInterval(activeCountdown);
     activeCountdown = null;
@@ -32,7 +35,7 @@ function clearCountdown(ctx: ExtensionContext): void {
 function wasAborted(messages: { role: string; stopReason?: string }[]): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
-    if (msg.role === "assistant") {
+    if (msg && msg.role === "assistant") {
       return msg.stopReason === "aborted";
     }
   }
@@ -47,7 +50,16 @@ function trySendAutoContinue(pi: ExtensionAPI, prompt: string): void {
     try {
       pi.sendUserMessage(prompt, { deliverAs: "followUp" });
     } catch {
-      // Agent truly unavailable (user typing, etc.) — skip auto-continue
+      // Last resort — notify the user
+      try {
+        pi.sendMessage({
+          customType: "til-done-complete",
+          content: "⚠ Auto-continue failed — you may need to continue manually.",
+          display: true,
+        }, { triggerTurn: false });
+      } catch {
+        // Completely silent — no way to reach the user
+      }
     }
   }
 }
@@ -62,7 +74,7 @@ function findNextIncomplete(
 
   for (let i = 0; i < todos.length; i++) {
     const todo = todos[i];
-    if (!isIncomplete(todo.status)) continue;
+    if (!todo || !isIncomplete(todo.status)) continue;
     incompleteIndices.push(i);
     if (todo.status === "in_progress" && nextInProgressIdx === -1) {
       nextInProgressIdx = i;
@@ -86,7 +98,7 @@ function scheduleAutoContinue(pi: ExtensionAPI, ctx: ExtensionContext, prompt: s
       clearInterval(activeCountdown);
     }
 
-    let remaining = 3;
+    let remaining = COUNTDOWN_SECONDS;
     const interval = setInterval(() => {
       try {
         remaining--;
@@ -108,14 +120,17 @@ function scheduleAutoContinue(pi: ExtensionAPI, ctx: ExtensionContext, prompt: s
 
     ctx.ui.setWidget(
       "til-done-countdown",
-      ["⏳ Auto-continuing in 3s... (type anything to interrupt)"],
+      [`⏳ Auto-continuing in ${COUNTDOWN_SECONDS}s... (type anything to interrupt)`],
       { placement: "aboveEditor" },
     );
   } else {
+    if (activeTimeout !== null) {
+      clearTimeout(activeTimeout);
+    }
     activeTimeout = setTimeout(() => {
       activeTimeout = null;
       trySendAutoContinue(pi, prompt);
-    }, 3000);
+    }, COUNTDOWN_SECONDS * 1000);
   }
 }
 
@@ -148,6 +163,7 @@ function handleAgentEnd(
 
   const remainingList = formatRemainingList(todos, result.indices);
   const nextItem = todos[result.nextIdx];
+  if (!nextItem) return;
   const nextAction = nextItem.status === "in_progress" ? "complete" : "start";
 
   const prompt = [

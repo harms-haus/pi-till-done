@@ -8,6 +8,10 @@ import { isValidTodoItem } from "./validation";
 let todos: TodoItem[] = [];
 let autoContinueCount = 0;
 
+function resetAutoContinue(): void {
+  autoContinueCount = 0;
+}
+
 // ── State Accessors ──
 
 /** Returns a readonly reference to the current todos */
@@ -18,28 +22,29 @@ export function getTodos(): readonly TodoItem[] {
 /** Replaces the entire todo list. Resets auto-continue counter. */
 export function setTodos(newTodos: TodoItem[]): void {
   todos = newTodos;
-  autoContinueCount = 0;
+  resetAutoContinue();
 }
 
 /** Updates the status of specific todo items by index. Resets auto-continue counter. */
 export function updateTodoStatus(indices: readonly number[], newStatus: TodoStatus): void {
   for (const idx of indices) {
     const item = todos[idx];
+    if (!item) continue;
     todos[idx] = { ...item, status: newStatus };
   }
-  autoContinueCount = 0;
+  resetAutoContinue();
 }
 
 /** Appends new todo items to the existing list. Resets auto-continue counter. */
 export function appendTodos(newItems: readonly TodoItem[]): void {
   todos = [...todos, ...newItems];
-  autoContinueCount = 0;
+  resetAutoContinue();
 }
 
 /** Inserts new todo items at a specific index. Resets auto-continue counter. */
 export function insertTodos(atIndex: number, newItems: readonly TodoItem[]): void {
   todos = [...todos.slice(0, atIndex), ...newItems, ...todos.slice(atIndex)];
-  autoContinueCount = 0;
+  resetAutoContinue();
 }
 
 /** Increments and returns the auto-continue counter */
@@ -69,16 +74,19 @@ export function reconstructState(ctx: ExtensionContext): TodoItem[] {
 
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
+    if (!entry) continue;
     if (entry.type !== "message") continue;
     const msg = entry.message;
     if (msg.role !== "toolResult") continue;
     if (!TOOL_NAMES.has(msg.toolName)) continue;
 
     if (!hasTodoDetails(msg.details)) continue;
-    const todos = msg.details.todos;
-    if (todos.length > 0) {
-      const valid = todos.filter(isValidTodoItem);
-      return valid.map((t) => ({ text: t.text, status: t.status }));
+    const rawTodos: unknown[] = msg.details.todos;
+    if (rawTodos.length > 0) {
+      return rawTodos.reduce<TodoItem[]>((acc, t) => {
+        if (isValidTodoItem(t)) acc.push({ text: t.text, status: t.status });
+        return acc;
+      }, []);
     }
   }
 
@@ -103,6 +111,7 @@ export function updateUI(ctx: ExtensionContext, todoList: readonly TodoItem[]): 
 
   for (let i = 0; i < total; i++) {
     const item = todoList[i];
+    if (!item) continue;
     if (item.status === "completed" || item.status === "abandoned") {
       done++;
     }

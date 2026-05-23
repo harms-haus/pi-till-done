@@ -60,7 +60,7 @@ Run `npm run lint` and `npm run format:check` before submitting to verify compli
 
 - All new features must have corresponding tests.
 - Run `npm test` before submitting — all tests must pass.
-- There are **194 tests across 6 test files** in `src/__tests__/`.
+- There are **201 tests across 6 test files** in `src/__tests__/`.
 
 ### Test Helpers
 

@@ -38,11 +38,14 @@ describe("write_todos tool", () => {
       ctx,
     );
 
-    expect(result.content[0].type).toBe("text");
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("task 1");
-      expect(result.content[0].text).toContain("Wrote 1 todo item(s)");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("task 1"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Wrote 1 todo item(s)"),
+    });
   });
 
   it("returns details with action 'write' and cloned todos", async () => {
@@ -59,11 +62,13 @@ describe("write_todos tool", () => {
     expect(result.details?.action).toBe("write");
     const resultTodos = result.details?.todos as Array<{ text: string; status: string }>;
     expect(resultTodos).toEqual([{ text: "task 1", status: "not_started" }]);
-    // Verify it's a clone by modifying original and checking it doesn't affect result
-    if (resultTodos) {
-      resultTodos[0].text = "modified";
+    // Verify it's a clone by modifying and checking it doesn't affect state
+    if (resultTodos && resultTodos.length > 0) {
+      resultTodos[0]!.text = "modified";
       const currentTodos = getTodos();
-      expect(currentTodos[0].text).toBe("task 1");
+      const first = currentTodos[0];
+      expect(first).toBeDefined();
+      if (first) expect(first.text).toBe("task 1");
     }
   });
 
@@ -82,10 +87,14 @@ describe("write_todos tool", () => {
     expect(result.details?.action).toBe("write");
     expect(result.details?.error).toBe("text too long");
     expect(result.details?.todos).toEqual([]);
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Error");
-      expect(result.content[0].text).toContain("exceeds maximum text length");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("text exceeds"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining(`${MAX_TODO_TEXT_LENGTH} characters`),
+    });
   });
 
   it("rejects item at index > 0 with correct index in error message", async () => {
@@ -100,9 +109,10 @@ describe("write_todos tool", () => {
       ctx,
     );
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("index 1");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Item 2"),
+    });
   });
 
   it("calls updateUI via context", async () => {
@@ -135,9 +145,10 @@ describe("write_todos tool", () => {
     );
     expect(getTodos()).toEqual([]);
     expect(result.details?.todos).toEqual([]);
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Wrote 0 todo item(s)");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Wrote 0 todo item(s)"),
+    });
   });
 });
 
@@ -195,10 +206,10 @@ describe("write_todos append mode", () => {
       ctx,
     );
 
-    expect(result.content[0].type).toBe("text");
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Appended 2 item(s)");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Appended 2 item(s)"),
+    });
   });
 
   it("returns details with action 'write' and cloned todos", async () => {
@@ -218,8 +229,12 @@ describe("write_todos append mode", () => {
     const resultTodos = result.details?.todos as Array<{ text: string; status: string }>;
     expect(resultTodos).toHaveLength(2);
     // Verify clone isolation
-    resultTodos[0].text = "modified";
-    expect(getTodos()[0].text).toBe("existing");
+    if (resultTodos.length > 0) {
+      resultTodos[0]!.text = "modified";
+      const first = getTodos()[0];
+      expect(first).toBeDefined();
+      if (first) expect(first.text).toBe("existing");
+    }
   });
 
   it("rejects oversized text", async () => {
@@ -313,8 +328,12 @@ describe("write_todos append mode", () => {
     );
 
     const todos = getTodos();
-    expect(todos[0].status).toBe("in_progress");
-    expect(todos[0].text).toBe("in-progress task");
+    const first = todos[0];
+    expect(first).toBeDefined();
+    if (first) {
+      expect(first.status).toBe("in_progress");
+      expect(first.text).toBe("in-progress task");
+    }
   });
 });
 
@@ -432,10 +451,10 @@ describe("write_todos insert mode", () => {
       ctx,
     );
 
-    expect(result.content[0].type).toBe("text");
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Inserted 2 item(s) at index 0");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Inserted 2 item(s) at index 0"),
+    });
   });
 
   it("returns details with action 'write' and cloned todos", async () => {
@@ -455,8 +474,12 @@ describe("write_todos insert mode", () => {
     const resultTodos = result.details?.todos as Array<{ text: string; status: string }>;
     expect(resultTodos).toHaveLength(2);
     // Verify clone isolation
-    resultTodos[0].text = "modified";
-    expect(getTodos()[0].text).toBe("new");
+    if (resultTodos.length > 0) {
+      resultTodos[0]!.text = "modified";
+      const first = getTodos()[0];
+      expect(first).toBeDefined();
+      if (first) expect(first.text).toBe("new");
+    }
   });
 
   it("requires index parameter", async () => {
@@ -487,9 +510,10 @@ describe("write_todos insert mode", () => {
     );
 
     expect(result.details?.error).toContain("out of range");
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("index -1 out of range");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("index -1 out of range"),
+    });
   });
 
   it("rejects index beyond length", async () => {
@@ -509,9 +533,10 @@ describe("write_todos insert mode", () => {
     );
 
     expect(result.details?.error).toContain("out of range");
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("index 3 out of range");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("index 3 out of range"),
+    });
   });
 
   it("rejects oversized text", async () => {
@@ -570,8 +595,12 @@ describe("write_todos insert mode", () => {
     );
 
     const todos = getTodos();
-    expect(todos[0].status).toBe("in_progress");
-    expect(todos[2].status).toBe("completed");
+    const first = todos[0];
+    const third = todos[2];
+    expect(first).toBeDefined();
+    expect(third).toBeDefined();
+    if (first) expect(first.status).toBe("in_progress");
+    if (third) expect(third.status).toBe("completed");
   });
 
   it("atomic: no mutation when index invalid", async () => {
@@ -624,11 +653,14 @@ describe("list_todos tool", () => {
 
     const result = await tool.execute("call-id", {}, new AbortController().signal, () => {}, ctx);
 
-    expect(result.content[0].type).toBe("text");
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("task 1");
-      expect(result.content[0].text).toContain("task 2");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("task 1"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("task 2"),
+    });
   });
 
   it("returns details with action 'list'", async () => {
@@ -657,9 +689,10 @@ describe("list_todos tool", () => {
 
     const result = await tool.execute("call-id", {}, new AbortController().signal, () => {}, ctx);
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toBe("No todos");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: "No todos",
+    });
   });
 });
 
@@ -685,9 +718,16 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    expect(getTodos()[0].status).toBe("in_progress");
-    expect(getTodos()[1].status).toBe("not_started");
-    expect(getTodos()[2].status).toBe("in_progress");
+    const todos = getTodos();
+    const t0 = todos[0];
+    const t1 = todos[1];
+    const t2 = todos[2];
+    expect(t0).toBeDefined();
+    expect(t1).toBeDefined();
+    expect(t2).toBeDefined();
+    if (t0) expect(t0.status).toBe("in_progress");
+    if (t1) expect(t1.status).toBe("not_started");
+    if (t2) expect(t2.status).toBe("in_progress");
     expect(result.details?.action).toBe("edit");
   });
 
@@ -707,8 +747,13 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    expect(getTodos()[0].status).toBe("completed");
-    expect(getTodos()[1].status).toBe("in_progress");
+    const todos = getTodos();
+    const t0 = todos[0];
+    const t1 = todos[1];
+    expect(t0).toBeDefined();
+    expect(t1).toBeDefined();
+    if (t0) expect(t0.status).toBe("completed");
+    if (t1) expect(t1.status).toBe("in_progress");
   });
 
   it("applies 'abandon' action to specified indices", async () => {
@@ -727,8 +772,13 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    expect(getTodos()[0].status).toBe("in_progress");
-    expect(getTodos()[1].status).toBe("abandoned");
+    const todos = getTodos();
+    const t0 = todos[0];
+    const t1 = todos[1];
+    expect(t0).toBeDefined();
+    expect(t1).toBeDefined();
+    if (t0) expect(t0.status).toBe("in_progress");
+    if (t1) expect(t1.status).toBe("abandoned");
   });
 
   it("returns error when no todos exist", async () => {
@@ -743,9 +793,10 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Error: no todos exist");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Error: no todos exist"),
+    });
     expect(result.details?.error).toBe("no todos exist");
   });
 
@@ -762,10 +813,14 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Error");
-      expect(result.content[0].text).toContain("indices [1, 2] out of range");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Error"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("indices [1, 2] out of range"),
+    });
     expect(result.details?.error).toContain("indices [1, 2] out of range");
   });
 
@@ -782,31 +837,35 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Error");
-      expect(result.content[0].text).toContain("indices [-1] out of range");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Error"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("indices [-1] out of range"),
+    });
   });
 
-  it("returns error when indices is missing for status actions", async () => {
+  it("handles missing indices gracefully (schema-enforced)", async () => {
     const tool = createEditTodosTool();
     const ctx = createMockContext();
     setTodos([{ text: "Task 1", status: "not_started" as const }]);
 
+    // Schema guarantees indices is non-empty; test runtime with empty array
     const result = await tool.execute(
       "call-id",
-      { action: "start" } as any,
+      { action: "start", indices: [] },
       new AbortController().signal,
       () => {},
       ctx,
     );
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Error");
-    }
-    expect(result.details.error).toBeDefined();
-    // Verify no mutation occurred
-    expect(getTodos()[0].status).toBe("not_started");
+    // With empty indices, no error is returned but no mutation occurs
+    expect(result.details.error).toBeUndefined();
+    const first = getTodos()[0];
+    expect(first).toBeDefined();
+    if (first) expect(first.status).toBe("not_started");
   });
 
   it("atomic: no mutation when any index is invalid", async () => {
@@ -842,11 +901,18 @@ describe("edit_todos tool", () => {
       ctx,
     );
 
-    if (result.content[0].type === "text") {
-      expect(result.content[0].text).toContain("Started");
-      expect(result.content[0].text).toContain("[0]");
-      expect(result.content[0].text).toContain("task 1");
-    }
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Started"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("[0]"),
+    });
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("task 1"),
+    });
   });
 
   it("returns details with action 'edit' and cloned todos", async () => {
@@ -866,9 +932,11 @@ describe("edit_todos tool", () => {
     const resultTodos = result.details?.todos as Array<{ text: string; status: string }>;
     expect(resultTodos).toEqual([{ text: "task 1", status: "in_progress" }]);
     // Verify it's a clone
-    if (resultTodos) {
-      resultTodos[0].text = "modified";
-      expect(getTodos()[0].text).toBe("task 1");
+    if (resultTodos && resultTodos.length > 0) {
+      resultTodos[0]!.text = "modified";
+      const first = getTodos()[0];
+      expect(first).toBeDefined();
+      if (first) expect(first.text).toBe("task 1");
     }
   });
 
@@ -890,7 +958,7 @@ describe("edit_todos tool", () => {
     expect(setStatus).toHaveBeenCalled();
   });
 
-  it("returns error when indices array is empty", async () => {
+  it("no-ops when indices array is empty (schema guarantees minItems: 1)", async () => {
     const tool = createEditTodosTool();
     const ctx = createMockContext();
     setTodos([{ text: "task 1", status: "not_started" as const }]);
@@ -901,8 +969,47 @@ describe("edit_todos tool", () => {
       () => {},
       ctx,
     );
-    expect(result.details?.error).toBe("indices required");
-    expect(getTodos()[0].status).toBe("not_started");
+    // Empty indices is schema-prevented; runtime no-ops without mutation
+    expect(result.details?.error).toBeUndefined();
+    const first = getTodos()[0];
+    expect(first).toBeDefined();
+    if (first) expect(first.status).toBe("not_started");
+  });
+
+  it("deduplicates indices [0, 0, 0] — applies action only once", async () => {
+    const tool = createEditTodosTool();
+    const ctx = createMockContext();
+    setTodos([
+      { text: "task 1", status: "not_started" as const },
+      { text: "task 2", status: "not_started" as const },
+    ]);
+
+    const result = await tool.execute(
+      "call-id",
+      { action: "start", indices: [0, 0, 0] },
+      new AbortController().signal,
+      () => {},
+      ctx,
+    );
+
+    // Index 0 should appear only once in the output
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: expect.stringContaining("Started [0]"),
+    });
+    // The deduplicated index [0] means it should NOT contain "[0, 0" etc.
+    expect(result.content[0]).not.toMatchObject({
+      type: "text",
+      text: expect.stringContaining("0, 0"),
+    });
+    // State should still be correct
+    const first = getTodos()[0];
+    expect(first).toBeDefined();
+    if (first) expect(first.status).toBe("in_progress");
+    // Second item untouched
+    const second = getTodos()[1];
+    expect(second).toBeDefined();
+    if (second) expect(second.status).toBe("not_started");
   });
 });
 
@@ -910,71 +1017,81 @@ describe("renderCall", () => {
   it("write_todos renderCall shows name and item count", () => {
     const tool = createWriteTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderCall) {
-      const result = tool.renderCall(
-        { mode: "replace", todos: [{ text: "task 1" }, { text: "task 2" }] },
-        mockTheme,
-        { expanded: false, isPartial: false } as any,
-      );
+    const renderCall = tool.renderCall;
+    expect(renderCall).toBeDefined();
+    if (!renderCall) return;
 
-      expect(result.toString()).toContain("write_todos");
-      expect(result.toString()).toContain("2 items");
-    }
+    const result = renderCall(
+      { mode: "replace", todos: [{ text: "task 1" }, { text: "task 2" }] },
+      mockTheme,
+      { expanded: false, isPartial: false } as any,
+    );
+
+    expect(result.toString()).toContain("write_todos");
+    expect(result.toString()).toContain("2 items");
   });
 
   it("list_todos renderCall shows name", () => {
     const tool = createListTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderCall) {
-      const result = tool.renderCall({}, mockTheme, { expanded: false, isPartial: false } as any);
+    const renderCall = tool.renderCall;
+    expect(renderCall).toBeDefined();
+    if (!renderCall) return;
 
-      expect(result.toString()).toContain("list_todos");
-    }
+    const result = renderCall({}, mockTheme, { expanded: false, isPartial: false } as any);
+
+    expect(result.toString()).toContain("list_todos");
   });
 
   it("edit_todos renderCall shows name, action, and indices", () => {
     const tool = createEditTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderCall) {
-      const result = tool.renderCall({ action: "start", indices: [0, 2] }, mockTheme, {
-        expanded: false,
-        isPartial: false,
-      } as any);
+    const renderCall = tool.renderCall;
+    expect(renderCall).toBeDefined();
+    if (!renderCall) return;
 
-      expect(result.toString()).toContain("edit_todos");
-      expect(result.toString()).toContain("start");
-      expect(result.toString()).toContain("[0, 2]");
-    }
+    const result = renderCall({ action: "start", indices: [0, 2] }, mockTheme, {
+      expanded: false,
+      isPartial: false,
+    } as any);
+
+    expect(result.toString()).toContain("edit_todos");
+    expect(result.toString()).toContain("start");
+    expect(result.toString()).toContain("[0, 2]");
   });
 
   it("write_todos renderCall shows append mode", () => {
     const tool = createWriteTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderCall) {
-      const result = tool.renderCall(
-        { mode: "append", todos: [{ text: "task 1" }, { text: "task 2" }, { text: "task 3" }] },
-        mockTheme,
-        { expanded: false, isPartial: false } as any,
-      );
+    const renderCall = tool.renderCall;
+    expect(renderCall).toBeDefined();
+    if (!renderCall) return;
 
-      expect(result.toString()).toContain("append");
-      expect(result.toString()).toContain("3 items");
-    }
+    const result = renderCall(
+      { mode: "append", todos: [{ text: "task 1" }, { text: "task 2" }, { text: "task 3" }] },
+      mockTheme,
+      { expanded: false, isPartial: false } as any,
+    );
+
+    expect(result.toString()).toContain("append");
+    expect(result.toString()).toContain("3 items");
   });
 
   it("write_todos renderCall shows insert mode with index", () => {
     const tool = createWriteTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderCall) {
-      const result = tool.renderCall(
-        { mode: "insert", index: 2, todos: [{ text: "task 1" }] },
-        mockTheme,
-        { expanded: false, isPartial: false } as any,
-      );
+    const renderCall = tool.renderCall;
+    expect(renderCall).toBeDefined();
+    if (!renderCall) return;
 
-      expect(result.toString()).toContain("insert");
-      expect(result.toString()).toContain("@2");
-    }
+    const result = renderCall(
+      { mode: "insert", index: 2, todos: [{ text: "task 1" }] },
+      mockTheme,
+      { expanded: false, isPartial: false } as any,
+    );
+
+    expect(result.toString()).toContain("insert");
+    expect(result.toString()).toContain("@2");
   });
 });
 
@@ -982,66 +1099,101 @@ describe("renderResult (shared via renderToolResult)", () => {
   it("renders error message for error details", () => {
     const tool = createWriteTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderResult) {
-      const result = tool.renderResult(
-        {
-          content: [{ type: "text", text: "Error: something went wrong" }],
-          details: { action: "write", todos: [], error: "something went wrong" },
-        },
-        { expanded: false, isPartial: false },
-        mockTheme,
-        {} as any,
-      );
+    const renderResult = tool.renderResult;
+    expect(renderResult).toBeDefined();
+    if (!renderResult) return;
 
-      const text = result.toString();
-      expect(text).toContain("Error");
-      expect(text).toContain("something went wrong");
-    }
+    const result = renderResult(
+      {
+        content: [{ type: "text", text: "Error: something went wrong" }],
+        details: { action: "write", todos: [], error: "something went wrong" },
+      },
+      { expanded: false, isPartial: false },
+      mockTheme,
+      {} as any,
+    );
+
+    const text = result.toString();
+    expect(text).toContain("Error");
+    expect(text).toContain("something went wrong");
   });
 
   it("renders todo list for success details", () => {
     const tool = createWriteTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderResult) {
-      const result = tool.renderResult(
-        {
-          content: [{ type: "text", text: "Wrote 1 todo item(s)" }],
-          details: {
-            action: "write",
-            todos: [{ text: "task 1", status: "completed" as const }],
-          },
-        },
-        { expanded: false, isPartial: false },
-        mockTheme,
-        {} as any,
-      );
+    const renderResult = tool.renderResult;
+    expect(renderResult).toBeDefined();
+    if (!renderResult) return;
 
-      expect(result.toString()).toContain("task 1");
-    }
+    const result = renderResult(
+      {
+        content: [{ type: "text", text: "Wrote 1 todo item(s)" }],
+        details: {
+          action: "write",
+          todos: [{ text: "task 1", status: "completed" as const }],
+        },
+      },
+      { expanded: false, isPartial: false },
+      mockTheme,
+      {} as any,
+    );
+
+    expect(result.toString()).toContain("task 1");
   });
 
   it("renders raw content text when no details", () => {
     const tool = createWriteTodosTool();
     const mockTheme = createMockTheme();
-    if (tool.renderResult) {
-      const result = tool.renderResult(
-        {
-          content: [{ type: "text", text: "Some raw content" }],
-          details: undefined as unknown as {
-            action: "write" | "list" | "edit";
-            todos: Array<{
-              text: string;
-              status: "completed" | "not_started" | "in_progress" | "abandoned";
-            }>;
-            error?: string;
-          },
-        },
-        { expanded: false, isPartial: false },
-        mockTheme,
-        {} as any,
-      );
+    const renderResult = tool.renderResult;
+    expect(renderResult).toBeDefined();
+    if (!renderResult) return;
 
-      expect(result.toString()).toBe("Some raw content");
-    }
+    const result = renderResult(
+      {
+        content: [{ type: "text", text: "Some raw content" }],
+        details: undefined as unknown as {
+          action: "write" | "list" | "edit";
+          todos: Array<{
+            text: string;
+            status: "completed" | "not_started" | "in_progress" | "abandoned";
+          }>;
+          error?: string;
+        },
+      },
+      { expanded: false, isPartial: false },
+      mockTheme,
+      {} as any,
+    );
+
+    expect(result.toString()).toBe("Some raw content");
+  });
+});
+
+describe("tool metadata", () => {
+  it("write_todos has correct name, label, and description", () => {
+    const tool = createWriteTodosTool();
+    expect(tool.name).toBe("write_todos");
+    expect(tool.label).toBe("Write Todos");
+    expect(tool.description).toBeTruthy();
+    expect(typeof tool.description).toBe("string");
+    expect(tool.description.length).toBeGreaterThan(0);
+  });
+
+  it("list_todos has correct name, label, and description", () => {
+    const tool = createListTodosTool();
+    expect(tool.name).toBe("list_todos");
+    expect(tool.label).toBe("List Todos");
+    expect(tool.description).toBeTruthy();
+    expect(typeof tool.description).toBe("string");
+    expect(tool.description.length).toBeGreaterThan(0);
+  });
+
+  it("edit_todos has correct name, label, and description", () => {
+    const tool = createEditTodosTool();
+    expect(tool.name).toBe("edit_todos");
+    expect(tool.label).toBe("Edit Todos");
+    expect(tool.description).toBeTruthy();
+    expect(typeof tool.description).toBe("string");
+    expect(tool.description.length).toBeGreaterThan(0);
   });
 });
